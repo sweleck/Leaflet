@@ -1,3 +1,10 @@
+import {Renderer} from './Renderer';
+import * as DomUtil from '../../dom/DomUtil';
+import * as DomEvent from '../../dom/DomEvent';
+import * as Browser from '../../core/Browser';
+import * as Util from '../../core/Util';
+import {Map} from '../../map/Map';
+
 /*
  * @class Canvas
  * @inherits Renderer
@@ -30,10 +37,10 @@
  * ```
  */
 
-L.Canvas = L.Renderer.extend({
+export var Canvas = Renderer.extend({
 
 	onAdd: function () {
-		L.Renderer.prototype.onAdd.call(this);
+		Renderer.prototype.onAdd.call(this);
 
 		// Redraw vectors since canvas is cleared upon removal,
 		// in case of removing the renderer itself from the map.
@@ -43,10 +50,9 @@ L.Canvas = L.Renderer.extend({
 	_initContainer: function () {
 		var container = this._container = document.createElement('canvas');
 
-		L.DomEvent
-			.on(container, 'mousemove', L.Util.throttle(this._onMouseMove, 32, this), this)
-			.on(container, 'click dblclick mousedown mouseup contextmenu', this._onClick, this)
-			.on(container, 'mouseout', this._handleMouseOut, this);
+		DomEvent.on(container, 'mousemove', L.Util.throttle(this._onMouseMove, 32, this), this);
+		DomEvent.on(container, 'click dblclick mousedown mouseup contextmenu', this._onClick, this);
+		DomEvent.on(container, 'mouseout', this._handleMouseOut, this);
 
 		this._ctx = container.getContext('2d');
 	},
@@ -56,14 +62,14 @@ L.Canvas = L.Renderer.extend({
 
 		this._drawnLayers = {};
 
-		L.Renderer.prototype._update.call(this);
+		Renderer.prototype._update.call(this);
 
 		var b = this._bounds,
 		    container = this._container,
 		    size = b.getSize(),
-		    m = L.Browser.retina ? 2 : 1;
+		    m = Browser.retina ? 2 : 1;
 
-		L.DomUtil.setPosition(container, b.min);
+		DomUtil.setPosition(container, b.min);
 
 		// set canvas size (also clearing it); use double size on retina
 		container.width = m * size.x;
@@ -71,7 +77,7 @@ L.Canvas = L.Renderer.extend({
 		container.style.width = size.x + 'px';
 		container.style.height = size.y + 'px';
 
-		if (L.Browser.retina) {
+		if (Browser.retina) {
 			this._ctx.scale(2, 2);
 		}
 
@@ -84,7 +90,7 @@ L.Canvas = L.Renderer.extend({
 
 	_initPath: function (layer) {
 		this._updateDashArray(layer);
-		this._layers[L.stamp(layer)] = layer;
+		this._layers[Util.stamp(layer)] = layer;
 	},
 
 	_addPath: function (layer) {
@@ -130,7 +136,7 @@ L.Canvas = L.Renderer.extend({
 		this._redrawBounds.extend(layer._pxBounds.min.subtract([padding, padding]));
 		this._redrawBounds.extend(layer._pxBounds.max.add([padding, padding]));
 
-		this._redrawRequest = this._redrawRequest || L.Util.requestAnimFrame(this._redraw, this);
+		this._redrawRequest = this._redrawRequest || Util.requestAnimFrame(this._redraw, this);
 	},
 
 	_redraw: function () {
@@ -257,7 +263,7 @@ L.Canvas = L.Renderer.extend({
 		for (var id in this._layers) {
 			layer = this._layers[id];
 			if (layer.options.interactive && layer._containsPoint(point) && !this._map._draggableMoved(layer)) {
-				L.DomEvent._fakeStop(e);
+				DomEvent.fakeStop(e);
 				layers.push(layer);
 			}
 		}
@@ -279,7 +285,7 @@ L.Canvas = L.Renderer.extend({
 		var layer = this._hoveredLayer;
 		if (layer && (e.type === 'mouseout' || !layer._containsPoint(point))) {
 			// if we're leaving the layer, fire mouseout
-			L.DomUtil.removeClass(this._container, 'leaflet-interactive');
+			DomUtil.removeClass(this._container, 'leaflet-interactive');
 			this._fireEvent([layer], e, 'mouseout');
 			this._hoveredLayer = null;
 		}
@@ -296,7 +302,7 @@ L.Canvas = L.Renderer.extend({
 		}
 
 		if (candidateHoveredLayer && candidateHoveredLayer !== this._hoveredLayer) {
-			L.DomUtil.addClass(this._container, 'leaflet-interactive'); // change cursor
+			DomUtil.addClass(this._container, 'leaflet-interactive'); // change cursor
 			this._fireEvent([candidateHoveredLayer], e, 'mouseover');
 			this._hoveredLayer = candidateHoveredLayer;
 		}
@@ -312,68 +318,62 @@ L.Canvas = L.Renderer.extend({
 
 	// TODO _bringToFront & _bringToBack, pretty tricky
 
-	_bringToFront: L.Util.falseFn,
-	_bringToBack: L.Util.falseFn
+	_bringToFront: Util.falseFn,
+	_bringToBack: Util.falseFn
 });
 
-// @namespace Browser; @property canvas: Boolean
-// `true` when the browser supports [`<canvas>`](https://developer.mozilla.org/docs/Web/API/Canvas_API).
-L.Browser.canvas = (function () {
-	return !!document.createElement('canvas').getContext;
-}());
-
-// @namespace Canvas
 // @factory L.canvas(options?: Renderer options)
 // Creates a Canvas renderer with the given options.
-L.canvas = function (options) {
-	return L.Browser.canvas ? new L.Canvas(options) : null;
+export function canvas (options) {
+	return Browser.canvas ? new L.Canvas(options) : null;
 };
 
-L.Polyline.prototype._containsPoint = function (p, closed) {
-	var i, j, k, len, len2, part,
-	    w = this._clickTolerance();
-
-	if (!this._pxBounds.contains(p)) { return false; }
-
-	// hit detection for polylines
-	for (i = 0, len = this._parts.length; i < len; i++) {
-		part = this._parts[i];
-
-		for (j = 0, len2 = part.length, k = len2 - 1; j < len2; k = j++) {
-			if (!closed && (j === 0)) { continue; }
-
-			if (L.LineUtil.pointToSegmentDistance(p, part[k], part[j]) <= w) {
-				return true;
-			}
-		}
-	}
-	return false;
-};
-
-L.Polygon.prototype._containsPoint = function (p) {
-	var inside = false,
-	    part, p1, p2, i, j, k, len, len2;
-
-	if (!this._pxBounds.contains(p)) { return false; }
-
-	// ray casting algorithm for detecting if point is in polygon
-	for (i = 0, len = this._parts.length; i < len; i++) {
-		part = this._parts[i];
-
-		for (j = 0, len2 = part.length, k = len2 - 1; j < len2; k = j++) {
-			p1 = part[j];
-			p2 = part[k];
-
-			if (((p1.y > p.y) !== (p2.y > p.y)) && (p.x < (p2.x - p1.x) * (p.y - p1.y) / (p2.y - p1.y) + p1.x)) {
-				inside = !inside;
-			}
-		}
-	}
-
-	// also check if it's on polygon stroke
-	return inside || L.Polyline.prototype._containsPoint.call(this, p, true);
-};
-
-L.CircleMarker.prototype._containsPoint = function (p) {
-	return p.distanceTo(this._point) <= this._radius + this._clickTolerance();
-};
+/// FIXME!!!!
+// Polyline.prototype._containsPoint = function (p, closed) {
+// 	var i, j, k, len, len2, part,
+// 	    w = this._clickTolerance();
+//
+// 	if (!this._pxBounds.contains(p)) { return false; }
+//
+// 	// hit detection for polylines
+// 	for (i = 0, len = this._parts.length; i < len; i++) {
+// 		part = this._parts[i];
+//
+// 		for (j = 0, len2 = part.length, k = len2 - 1; j < len2; k = j++) {
+// 			if (!closed && (j === 0)) { continue; }
+//
+// 			if (LineUtil.pointToSegmentDistance(p, part[k], part[j]) <= w) {
+// 				return true;
+// 			}
+// 		}
+// 	}
+// 	return false;
+// };
+//
+// Polygon.prototype._containsPoint = function (p) {
+// 	var inside = false,
+// 	    part, p1, p2, i, j, k, len, len2;
+//
+// 	if (!this._pxBounds.contains(p)) { return false; }
+//
+// 	// ray casting algorithm for detecting if point is in polygon
+// 	for (i = 0, len = this._parts.length; i < len; i++) {
+// 		part = this._parts[i];
+//
+// 		for (j = 0, len2 = part.length, k = len2 - 1; j < len2; k = j++) {
+// 			p1 = part[j];
+// 			p2 = part[k];
+//
+// 			if (((p1.y > p.y) !== (p2.y > p.y)) && (p.x < (p2.x - p1.x) * (p.y - p1.y) / (p2.y - p1.y) + p1.x)) {
+// 				inside = !inside;
+// 			}
+// 		}
+// 	}
+//
+// 	// also check if it's on polygon stroke
+// 	return inside || Polyline.prototype._containsPoint.call(this, p, true);
+// };
+//
+// CircleMarker.prototype._containsPoint = function (p) {
+// 	return p.distanceTo(this._point) <= this._radius + this._clickTolerance();
+// };
