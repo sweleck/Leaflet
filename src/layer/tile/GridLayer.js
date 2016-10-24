@@ -1,8 +1,7 @@
 import {Layer} from '../Layer';
-import {mobile, ielt9, any3d, android, android23} from '../../core/Browser';
-import {setOptions, throttle, requestAnimFrame, cancelAnimFrame, falseFn,
-        bind, wrapNum} from '../../core/Util';
-import {remove, toFront, toBack, setOpacity, create, setTransform, addClass, setPosition} from '../../dom/DomUtil';
+import * as Browser from '../../core/Browser';
+import * as Util from '../../core/Util';
+import * as DomUtil from '../../dom/DomUtil';
 import {Point} from '../../geometry/Point';
 import {Bounds} from '../../geometry/Bounds';
 import {LatLngBounds, toLatLngBounds as latLngBounds} from '../../geo/LatLngBounds';
@@ -88,7 +87,7 @@ export var GridLayer = Layer.extend({
 
 		// @option updateWhenIdle: Boolean = depends
 		// If `false`, new tiles are loaded during panning, otherwise only after it (for better performance). `true` by default on mobile browsers, otherwise `false`.
-		updateWhenIdle: mobile,
+		updateWhenIdle: Browser.mobile,
 
 		// @option updateWhenZooming: Boolean = true
 		// By default, a smooth zoom animation (during a [touch zoom](#map-touchzoom) or a [`flyTo()`](#map-flyto)) will update grid layers every integer zoom level. Setting this option to `false` will update the grid layer only when the smooth animation ends.
@@ -134,7 +133,7 @@ export var GridLayer = Layer.extend({
 	},
 
 	initialize: function (options) {
-		setOptions(this, options);
+		Util.setOptions(this, options);
 	},
 
 	onAdd: function () {
@@ -153,7 +152,7 @@ export var GridLayer = Layer.extend({
 
 	onRemove: function (map) {
 		this._removeAllTiles();
-		remove(this._container);
+		DomUtil.remove(this._container);
 		map._removeZoomLimit(this);
 		this._container = null;
 		this._tileZoom = null;
@@ -163,7 +162,7 @@ export var GridLayer = Layer.extend({
 	// Brings the tile layer to the top of all tile layers.
 	bringToFront: function () {
 		if (this._map) {
-			toFront(this._container);
+			DomUtil.toFront(this._container);
 			this._setAutoZIndex(Math.max);
 		}
 		return this;
@@ -173,7 +172,7 @@ export var GridLayer = Layer.extend({
 	// Brings the tile layer to the bottom of all tile layers.
 	bringToBack: function () {
 		if (this._map) {
-			toBack(this._container);
+			DomUtil.toBack(this._container);
 			this._setAutoZIndex(Math.min);
 		}
 		return this;
@@ -229,7 +228,7 @@ export var GridLayer = Layer.extend({
 		if (!this.options.updateWhenIdle) {
 			// update tiles on move, but not more often than once per given interval
 			if (!this._onMove) {
-				this._onMove = throttle(this._onMoveEnd, this.options.updateInterval, this);
+				this._onMove = Util.throttle(this._onMoveEnd, this.options.updateInterval, this);
 			}
 
 			events.move = this._onMove;
@@ -291,9 +290,9 @@ export var GridLayer = Layer.extend({
 		if (!this._map) { return; }
 
 		// IE doesn't inherit filter opacity properly, so we're forced to set it on tiles
-		if (ielt9) { return; }
+		if (Browser.ielt9) { return; }
 
-		setOpacity(this._container, this.options.opacity);
+		DomUtil.setOpacity(this._container, this.options.opacity);
 
 		var now = +new Date(),
 		    nextFrame = false,
@@ -305,7 +304,7 @@ export var GridLayer = Layer.extend({
 
 			var fade = Math.min(1, (now - tile.loaded) / 200);
 
-			setOpacity(tile.el, fade);
+			DomUtil.setOpacity(tile.el, fade);
 			if (fade < 1) {
 				nextFrame = true;
 			} else {
@@ -317,15 +316,15 @@ export var GridLayer = Layer.extend({
 		if (willPrune && !this._noPrune) { this._pruneTiles(); }
 
 		if (nextFrame) {
-			cancelAnimFrame(this._fadeFrame);
-			this._fadeFrame = requestAnimFrame(this._updateOpacity, this);
+			Util.cancelAnimFrame(this._fadeFrame);
+			this._fadeFrame = Util.requestAnimFrame(this._updateOpacity, this);
 		}
 	},
 
 	_initContainer: function () {
 		if (this._container) { return; }
 
-		this._container = create('div', 'leaflet-layer ' + (this.options.className || ''));
+		this._container = DomUtil.create('div', 'leaflet-layer ' + (this.options.className || ''));
 		this._updateZIndex();
 
 		if (this.options.opacity < 1) {
@@ -346,7 +345,7 @@ export var GridLayer = Layer.extend({
 			if (this._levels[z].el.children.length || z === zoom) {
 				this._levels[z].el.style.zIndex = maxZoom - Math.abs(zoom - z);
 			} else {
-				remove(this._levels[z].el);
+				DomUtil.remove(this._levels[z].el);
 				this._removeTilesAtZoom(z);
 				delete this._levels[z];
 			}
@@ -358,7 +357,7 @@ export var GridLayer = Layer.extend({
 		if (!level) {
 			level = this._levels[zoom] = {};
 
-			level.el = create('div', 'leaflet-tile-container leaflet-zoom-animated', this._container);
+			level.el = DomUtil.create('div', 'leaflet-tile-container leaflet-zoom-animated', this._container);
 			level.el.style.zIndex = maxZoom;
 
 			level.origin = map.project(map.unproject(map.getPixelOrigin()), zoom).round();
@@ -367,7 +366,7 @@ export var GridLayer = Layer.extend({
 			this._setZoomTransform(level, map.getCenter(), map.getZoom());
 
 			// force the browser to consider the newly added element for transition
-			falseFn(level.el.offsetWidth);
+			Util.falseFn(level.el.offsetWidth);
 		}
 
 		this._level = level;
@@ -428,7 +427,7 @@ export var GridLayer = Layer.extend({
 
 	_invalidateAll: function () {
 		for (var z in this._levels) {
-			remove(this._levels[z].el);
+			DomUtil.remove(this._levels[z].el);
 			delete this._levels[z];
 		}
 		this._removeAllTiles();
@@ -543,10 +542,10 @@ export var GridLayer = Layer.extend({
 		    translate = level.origin.multiplyBy(scale)
 		        .subtract(this._map._getNewPixelOrigin(center, zoom)).round();
 
-		if (any3d) {
-			setTransform(level.el, translate, scale);
+		if (Browser.any3d) {
+			DomUtil.setTransform(level.el, translate, scale);
 		} else {
-			setPosition(level.el, translate);
+			DomUtil.setPosition(level.el, translate);
 		}
 	},
 
@@ -715,7 +714,7 @@ export var GridLayer = Layer.extend({
 		var tile = this._tiles[key];
 		if (!tile) { return; }
 
-		remove(tile.el);
+		DomUtil.remove(tile.el);
 
 		delete this._tiles[key];
 
@@ -728,23 +727,23 @@ export var GridLayer = Layer.extend({
 	},
 
 	_initTile: function (tile) {
-		addClass(tile, 'leaflet-tile');
+		DomUtil.addClass(tile, 'leaflet-tile');
 
 		var tileSize = this.getTileSize();
 		tile.style.width = tileSize.x + 'px';
 		tile.style.height = tileSize.y + 'px';
 
-		tile.onselectstart = falseFn;
-		tile.onmousemove = falseFn;
+		tile.onselectstart = Util.falseFn;
+		tile.onmousemove = Util.falseFn;
 
 		// update opacity on tiles in IE7-8 because of filter inheritance problems
-		if (ielt9 && this.options.opacity < 1) {
-			setOpacity(tile, this.options.opacity);
+		if (Browser.ielt9 && this.options.opacity < 1) {
+			DomUtil.setOpacity(tile, this.options.opacity);
 		}
 
 		// without this hack, tiles disappear after zoom on Chrome for Android
 		// https://github.com/Leaflet/Leaflet/issues/2078
-		if (android && !android23) {
+		if (Browser.android && !Browser.android23) {
 			tile.style.WebkitBackfaceVisibility = 'hidden';
 		}
 	},
@@ -753,7 +752,7 @@ export var GridLayer = Layer.extend({
 		var tilePos = this._getTilePos(coords),
 		    key = this._tileCoordsToKey(coords);
 
-		var tile = this.createTile(this._wrapCoords(coords), bind(this._tileReady, this, coords));
+		var tile = this.createTile(this._wrapCoords(coords), Util.bind(this._tileReady, this, coords));
 
 		this._initTile(tile);
 
@@ -761,10 +760,10 @@ export var GridLayer = Layer.extend({
 		// we know that tile is async and will be ready later; otherwise
 		if (this.createTile.length < 2) {
 			// mark tile as ready, but delay one frame for opacity animation to happen
-			requestAnimFrame(bind(this._tileReady, this, coords, null, tile));
+			Util.requestAnimFrame(Util.bind(this._tileReady, this, coords, null, tile));
 		}
 
-		setPosition(tile, tilePos);
+		DomUtil.setPosition(tile, tilePos);
 
 		// save tile in cache
 		this._tiles[key] = {
@@ -802,16 +801,16 @@ export var GridLayer = Layer.extend({
 
 		tile.loaded = +new Date();
 		if (this._map._fadeAnimated) {
-			setOpacity(tile.el, 0);
-			cancelAnimFrame(this._fadeFrame);
-			this._fadeFrame = requestAnimFrame(this._updateOpacity, this);
+			DomUtil.setOpacity(tile.el, 0);
+			Util.cancelAnimFrame(this._fadeFrame);
+			this._fadeFrame = Util.requestAnimFrame(this._updateOpacity, this);
 		} else {
 			tile.active = true;
 			this._pruneTiles();
 		}
 
 		if (!err) {
-			addClass(tile.el, 'leaflet-tile-loaded');
+			DomUtil.addClass(tile.el, 'leaflet-tile-loaded');
 
 			// @event tileload: TileEvent
 			// Fired when a tile loads.
@@ -827,12 +826,12 @@ export var GridLayer = Layer.extend({
 			// Fired when the grid layer loaded all visible tiles.
 			this.fire('load');
 
-			if (ielt9 || !this._map._fadeAnimated) {
-				requestAnimFrame(this._pruneTiles, this);
+			if (Browser.ielt9 || !this._map._fadeAnimated) {
+				Util.requestAnimFrame(this._pruneTiles, this);
 			} else {
 				// Wait a bit more than 0.2 secs (the duration of the tile fade-in)
 				// to trigger a pruning.
-				setTimeout(bind(this._pruneTiles, this), 250);
+				setTimeout(Util.bind(this._pruneTiles, this), 250);
 			}
 		}
 	},
@@ -843,8 +842,8 @@ export var GridLayer = Layer.extend({
 
 	_wrapCoords: function (coords) {
 		var newCoords = new Point(
-			this._wrapX ? wrapNum(coords.x, this._wrapX) : coords.x,
-			this._wrapY ? wrapNum(coords.y, this._wrapY) : coords.y);
+			this._wrapX ? Util.wrapNum(coords.x, this._wrapX) : coords.x,
+			this._wrapY ? Util.wrapNum(coords.y, this._wrapY) : coords.y);
 		newCoords.z = coords.z;
 		return newCoords;
 	},
